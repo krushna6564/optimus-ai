@@ -1,23 +1,21 @@
 import 'package:flutter/material.dart';
-
+import '../widgets/animated_background.dart';
+import '../widgets/header_widget.dart';
+import '../widgets/ai_orb.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("OPTIMUS"),
-      ),
+      body: Stack(
+        children: [
+          const AnimatedBackground(),
 
-      body: const Center(
-        child: Text(
-          "Welcome to Optimus",
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+          const HeaderWidget(),
+
+          const AiOrb(),
+        ],
       ),
     );
   }
