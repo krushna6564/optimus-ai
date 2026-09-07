@@ -6,6 +6,7 @@ enum AiState {
   idle,
   listening,
   thinking,
+  speaking,
 }
 
 class AiOrb extends StatefulWidget {
@@ -49,10 +50,20 @@ class _AiOrbState extends State<AiOrb>
         if (!mounted) return;
 
         setState(() {
-          _state = AiState.idle;
+          _state = AiState.speaking;
         });
 
-        _controller.duration = const Duration(seconds: 2);
+        _controller.duration = const Duration(milliseconds: 450);
+
+        Timer(const Duration(seconds: 3), () {
+          if (!mounted) return;
+
+          setState(() {
+            _state = AiState.idle;
+          });
+
+          _controller.duration = const Duration(seconds: 2);
+        });
       });
     }
   }
@@ -67,6 +78,9 @@ class _AiOrbState extends State<AiOrb>
 
       case AiState.thinking:
         return 'Thinking...';
+
+      case AiState.speaking:
+        return 'Speaking...';
     }
   }
 
@@ -95,22 +109,32 @@ class _AiOrbState extends State<AiOrb>
                   double scale;
                   double glow;
                   double opacity;
+                  double spread;
 
                   switch (_state) {
                     case AiState.idle:
                       scale = 0.94 + (animationValue * 0.12);
                       glow = 20 + (animationValue * 25);
                       opacity = 0.65;
+                      spread = 5;
 
                     case AiState.listening:
                       scale = 0.90 + (animationValue * 0.20);
                       glow = 30 + (animationValue * 35);
                       opacity = 0.85;
+                      spread = 8;
 
                     case AiState.thinking:
                       scale = 0.88 + (animationValue * 0.24);
                       glow = 35 + (animationValue * 45);
                       opacity = 0.95;
+                      spread = 10;
+
+                    case AiState.speaking:
+                      scale = 0.86 + (animationValue * 0.28);
+                      glow = 40 + (animationValue * 55);
+                      opacity = 1.0;
+                      spread = 12;
                   }
 
                   return Transform.scale(
@@ -134,8 +158,7 @@ class _AiOrbState extends State<AiOrb>
                               alpha: opacity,
                             ),
                             blurRadius: glow,
-                            spreadRadius:
-                                _state == AiState.thinking ? 10 : 5,
+                            spreadRadius: spread,
                           ),
                         ],
                       ),
