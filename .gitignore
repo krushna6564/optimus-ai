@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Python voice engine
+voice_engine/.venv/
+voice_engine/__pycache__/
+voice_engine/**/*.pyc
+
+# Downloaded voice models
+voice_engine/models/
