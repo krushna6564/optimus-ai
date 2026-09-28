@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,12 @@ enum AiState {
 }
 
 class AiOrb extends StatefulWidget {
-  const AiOrb({super.key});
+  const AiOrb({
+    super.key,
+    this.wakeWordCount = 0,
+  });
+
+  final int wakeWordCount;
 
   @override
   State<AiOrb> createState() => _AiOrbState();
@@ -19,7 +25,6 @@ class AiOrb extends StatefulWidget {
 class _AiOrbState extends State<AiOrb>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-
   AiState _state = AiState.idle;
 
   @override
@@ -30,6 +35,23 @@ class _AiOrbState extends State<AiOrb>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant AiOrb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.wakeWordCount > oldWidget.wakeWordCount) {
+      _handleWakeWord();
+    }
+  }
+
+  void _handleWakeWord() {
+    setState(() {
+      _state = AiState.listening;
+    });
+
+    _controller.duration = const Duration(milliseconds: 800);
   }
 
   void _handleOrbTap() {
@@ -72,13 +94,10 @@ class _AiOrbState extends State<AiOrb>
     switch (_state) {
       case AiState.idle:
         return 'OPTIMUS is ready';
-
       case AiState.listening:
         return 'Listening...';
-
       case AiState.thinking:
         return 'Thinking...';
-
       case AiState.speaking:
         return 'Speaking...';
     }
@@ -117,19 +136,16 @@ class _AiOrbState extends State<AiOrb>
                       glow = 20 + (animationValue * 25);
                       opacity = 0.65;
                       spread = 5;
-
                     case AiState.listening:
                       scale = 0.90 + (animationValue * 0.20);
                       glow = 30 + (animationValue * 35);
                       opacity = 0.85;
                       spread = 8;
-
                     case AiState.thinking:
                       scale = 0.88 + (animationValue * 0.24);
                       glow = 35 + (animationValue * 45);
                       opacity = 0.95;
                       spread = 10;
-
                     case AiState.speaking:
                       scale = 0.86 + (animationValue * 0.28);
                       glow = 40 + (animationValue * 55);
