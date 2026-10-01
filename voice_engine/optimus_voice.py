@@ -3,13 +3,17 @@ import sys
 import re
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 import sounddevice as sd
 import sherpa_onnx
+import numpy as np
+from piper import PiperVoice
 
 # Model paths
 KWS_MODEL_DIR = r"models\sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
 ASR_MODEL_DIR = r"models\sherpa-onnx-zipformer-gigaspeech-2023-12-12"
+TTS_MODEL_PATH = Path("models/piper/en_US-lessac-medium.onnx")
 
 SAMPLE_RATE = 16000
 DEVICE = 2
@@ -17,6 +21,23 @@ BLOCK_SIZE = 1600
 
 # Keep recent audio so commands are not cut off
 PRE_ROLL_BLOCKS = 15
+
+# Load offline text-to-speech voice
+voice = PiperVoice.load(str(TTS_MODEL_PATH))
+
+
+def speak(text):
+    """Convert text to speech and play it."""
+    audio_chunks = []
+
+    for chunk in voice.synthesize(text):
+        audio_chunks.append(chunk.audio_int16)
+
+    if audio_chunks:
+        audio = np.concatenate(audio_chunks)
+        sd.play(audio, samplerate=voice.config.sample_rate)
+        sd.wait()
+
 
 # Wake-word detection
 spotter = sherpa_onnx.KeywordSpotter(
@@ -51,7 +72,6 @@ def clean_transcript(text):
     """Remove common wake-word variations from the start."""
     text = text.strip()
 
-    # Normalize punctuation for checking
     cleaned = re.sub(r"[^\w\s]", " ", text.upper())
     cleaned = " ".join(cleaned.split())
 
@@ -67,10 +87,11 @@ def clean_transcript(text):
 
     for phrase in wake_phrases:
         if cleaned.startswith(phrase):
-            # Remove the matching phrase from the original transcript
             words_to_remove = len(phrase.split())
             original_words = text.split()
-            return " ".join(original_words[words_to_remove:]).strip(" ,.!?")
+            return " ".join(
+                original_words[words_to_remove:]
+            ).strip(" ,.!?")
 
     return text.strip(" ,.!?")
 
@@ -96,12 +117,13 @@ def process_command(text):
         or "what's my name" in command
         or "who am i" in command
     ):
-        return "Your name is Krushna ."
+        return "Your name is Krushna."
 
     return "Sorry, I don't know how to handle that command yet."
 
 
 print("VOICE_READY", flush=True)
+print("TTS_READY", flush=True)
 print("OPTIMUS is listening for HEY OPTIMUS.", flush=True)
 
 stream = spotter.create_stream()
@@ -132,7 +154,6 @@ try:
             ) ** 0.5
 
             if not listening_for_command:
-                # Keep a rolling history of recent microphone audio
                 recent_audio.append(samples.tolist())
 
                 stream.accept_waveform(SAMPLE_RATE, samples)
@@ -147,7 +168,6 @@ try:
 
                     listening_for_command = True
 
-                    # Include recent audio to avoid losing speech
                     audio_buffer = [
                         sample
                         for block in recent_audio
@@ -182,6 +202,9 @@ try:
 
                             response = process_command(text)
                             print(f"OPTIMUS: {response}", flush=True)
+
+                            # Speak the response aloud
+                            speak(response)
 
                     # Reset for the next wake word
                     audio_buffer = []

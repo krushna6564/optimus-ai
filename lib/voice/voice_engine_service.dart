@@ -4,21 +4,15 @@ import 'dart:convert';
 import 'dart:io';
 
 class VoiceEngineService {
-  Process? _kwsProcess;
-  Process? _sttProcess;
-
-  StreamSubscription<String>? _kwsOutput;
-  StreamSubscription<String>? _kwsError;
-  StreamSubscription<String>? _sttOutput;
-  StreamSubscription<String>? _sttError;
-
+  Process? _process;
+  StreamSubscription<String>? _output;
+  StreamSubscription<String>? _error;
   final StreamController<String> _eventController =
       StreamController<String>.broadcast();
 
   Stream<String> get events => _eventController.stream;
 
-  bool get isRunning =>
-      _kwsProcess != null || _sttProcess != null;
+  bool get isRunning => _process != null;
 
   Future<void> start() async {
     if (isRunning) return;
@@ -26,114 +20,72 @@ class VoiceEngineService {
     final projectPath = Directory.current.path;
     final voiceDirectory = '$projectPath\\voice_engine';
     final pythonPath = '$voiceDirectory\\.venv\\Scripts\\python.exe';
-
-    final kwsScript = '$voiceDirectory\\kws_optimus_test.py';
-    final sttScript = '$voiceDirectory\\stt_engine.py';
+    final scriptPath = '$voiceDirectory\\optimus_voice.py';
 
     if (!File(pythonPath).existsSync()) {
       throw Exception('Python environment not found: $pythonPath');
     }
 
-    if (!File(kwsScript).existsSync()) {
-      throw Exception('Wake-word script not found: $kwsScript');
+    if (!File(scriptPath).existsSync()) {
+      throw Exception('Voice engine script not found: $scriptPath');
     }
 
-    if (!File(sttScript).existsSync()) {
-      throw Exception('STT script not found: $sttScript');
-    }
+    final process = await Process.start(
+      pythonPath,
+      ['-u', scriptPath],
+      workingDirectory: voiceDirectory,
+      runInShell: false,
+    );
 
-    try {
-      _kwsProcess = await Process.start(
-        pythonPath,
-        ['-u', kwsScript],
-        workingDirectory: voiceDirectory,
-        runInShell: false,
-      );
+    _process = process;
 
-      _kwsOutput = _kwsProcess!.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen((line) {
-        if (line.startsWith('Detected:')) {
-          _eventController.add('wake_word_detected');
+    _output = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      if (line == 'VOICE_READY') {
+        _eventController.add('voice_ready');
+      } else if (line == 'WAKE_WORD_DETECTED') {
+        _eventController.add('wake_word_detected');
+      } else if (line.startsWith('TRANSCRIPT:')) {
+        final transcript = line.substring('TRANSCRIPT:'.length).trim();
+        if (transcript.isNotEmpty) {
+          _eventController.add('transcript:$transcript');
         }
-      });
+      } else if (line == 'LISTENING_FOR_WAKE_WORD') {
+        _eventController.add('listening_for_wake_word');
+      }
+    });
 
-      _kwsError = _kwsProcess!.stderr
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen((line) {
-        stderr.writeln('Wake-word engine: $line');
-      });
+    _error = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((line) {
+      stderr.writeln('Voice engine: $line');
+      _eventController.add('voice_error:$line');
+    });
 
-      _sttProcess = await Process.start(
-        pythonPath,
-        ['-u', sttScript],
-        workingDirectory: voiceDirectory,
-        runInShell: false,
-      );
-
-      _sttOutput = _sttProcess!.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen((line) {
-        if (line.startsWith('TRANSCRIPT:')) {
-          final transcript = line.substring('TRANSCRIPT:'.length).trim();
-          if (transcript.isNotEmpty) {
-            _eventController.add('transcript:$transcript');
-          }
-        }
-      });
-
-      _sttError = _sttProcess!.stderr
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen((line) {
-        stderr.writeln('Speech recognition: $line');
-      });
-
-      _kwsProcess!.exitCode.then((code) {
-        stderr.writeln('Wake-word engine exited: $code');
-        if (identical(_kwsProcess, _kwsProcess)) {
-          _kwsProcess = null;
-        }
-      });
-
-      _sttProcess!.exitCode.then((code) {
-        stderr.writeln('Speech recognition exited: $code');
-        _sttProcess = null;
-      });
-    } catch (error) {
-      await stop();
-      rethrow;
-    }
+    process.exitCode.then((code) {
+      if (identical(_process, process)) {
+        _process = null;
+        _eventController.add('voice_stopped');
+      }
+      stderr.writeln('Voice engine exited: $code');
+    });
   }
 
   Future<void> stop() async {
-    await _kwsOutput?.cancel();
-    await _kwsError?.cancel();
-    await _sttOutput?.cancel();
-    await _sttError?.cancel();
+    final process = _process;
+    _process = null;
 
-    _kwsOutput = null;
-    _kwsError = null;
-    _sttOutput = null;
-    _sttError = null;
+    await _output?.cancel();
+    await _error?.cancel();
+    _output = null;
+    _error = null;
 
-    final kws = _kwsProcess;
-    final stt = _sttProcess;
-
-    _kwsProcess = null;
-    _sttProcess = null;
-
-    kws?.kill();
-    stt?.kill();
-
-    if (kws != null) {
-      await kws.exitCode;
-    }
-    if (stt != null) {
-      await stt.exitCode;
+    if (process != null) {
+      process.kill();
+      await process.exitCode;
     }
   }
 

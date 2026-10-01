@@ -21,17 +21,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _wakeWordCount = 0;
   bool _isVoiceEngineRunning = false;
+  String _transcript = '';
 
   @override
   void initState() {
     super.initState();
 
     _voiceSubscription = _voiceEngine.events.listen((event) {
-      if (event == 'wake_word_detected' && mounted) {
-        setState(() {
+      if (!mounted) return;
+
+      setState(() {
+        if (event == 'wake_word_detected') {
           _wakeWordCount++;
-        });
-      }
+          _transcript = 'Wake word detected. Listening...';
+        } else if (event.startsWith('transcript:')) {
+          _transcript = event.substring('transcript:'.length).trim();
+        } else if (event == 'voice_ready') {
+          _transcript = 'Listening for Hey Optimus...';
+        } else if (event == 'voice_stopped') {
+          _isVoiceEngineRunning = false;
+          _transcript = 'Voice engine stopped.';
+        } else if (event.startsWith('voice_error:')) {
+          _transcript = 'Voice error: ${event.substring('voice_error:'.length)}';
+        }
+      });
     });
   }
 
@@ -41,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _isVoiceEngineRunning = false;
+        _transcript = 'Voice engine stopped.';
       });
     } else {
       try {
@@ -48,10 +62,15 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) return;
         setState(() {
           _isVoiceEngineRunning = true;
+          _transcript = 'Starting voice engine...';
         });
       } catch (error) {
         debugPrint('Could not start voice engine: $error');
         if (!mounted) return;
+        setState(() {
+          _isVoiceEngineRunning = false;
+          _transcript = 'Could not start voice engine.';
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not start voice engine: $error')),
         );
@@ -74,6 +93,39 @@ class _HomeScreenState extends State<HomeScreen> {
           const AnimatedBackground(),
           const HeaderWidget(),
           AiOrb(wakeWordCount: _wakeWordCount),
+
+          Positioned(
+            bottom: 100,
+            left: 24,
+            right: 24,
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 500),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF101A35).withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.blueAccent.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  _transcript.isEmpty
+                      ? 'Your recognized speech will appear here'
+                      : _transcript,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           Positioned(
             bottom: 32,
             left: 0,
